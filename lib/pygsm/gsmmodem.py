@@ -211,6 +211,9 @@ class GsmModem(object):
         """initialize the modem configuration with settings needed to process
            commands and send/receive SMS.
         """
+        # AT+CPIN? to check for SIM?
+        # AT+WMBS? to check band?
+        # AT+COPS? and AT+CREG? to check for registration?
         
         # set some sensible defaults, to make
         # the various modems more consistant
@@ -468,6 +471,9 @@ class GsmModem(object):
         """Returns an integer between 1 and 99, representing the current
            signal strength of the GSM network, False if we don't know, or
            None if the modem can't report it."""
+        # TODO this is not a good way to tell if u can send sms --
+        # you don't have to be registered on a network to get
+        # a valid signal strength from the modem!!!!!!!!
 
         data = self.query("AT+CSQ")
         md = re.match(r"^\+CSQ: (\d+),", data)
