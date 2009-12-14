@@ -437,6 +437,53 @@ class GsmModem(object):
         return None
 
 
+    def run_ussd(self, code_string, read_term=None, read_timeout=None, write_term="\r", raise_errors=True):
+        try:
+            # run USSD code, and wait for the
+            # response. the '1' indicates that we
+            # want the result presented to us
+            ussd_string = "AT+CUSD=1,\"%s\"" % (code_string) 
+            with self.modem_lock:
+                self._write(ussd_string + write_term)
+                lines = self.device.read_lines_until(
+                    "+CUSD:",
+                    read_term=read_term,
+                    read_timeout=read_timeout)
+
+        except errors.GsmError, err:
+            if not raise_errors:
+                return None
+            else:
+                raise(err)
+
+        # if the first line of the response echoes the cmd
+        # (it shouldn't, if ATE0 worked), silently drop it
+        if lines[0] == ussd_string:
+            lines.pop(0)
+
+        # remove all blank lines and unsolicited
+        # status messages. i can't seem to figure
+        # out how to reliably disable them, and
+        # AT+WIND=0 doesn't work on this modem
+        lines = [
+            line
+            for line in lines
+            if line      != "" or\
+               line[0:6] == "+WIND:" or\
+               line[0:6] == "+CREG:" or\
+               line[0:7] == "+CGRED:"]
+
+        # parse out any incoming sms that were bundled
+        # with this data (to be fetched later by an app)
+        lines = self._parse_incoming_sms(lines)
+
+        # rest up for a bit (modems are
+        # slow, and get confused easily)
+        time.sleep(self.cmd_delay)
+
+        return lines
+
+
     def send_sms(self, recipient, text):
         """
         Sends an SMS to _recipient_ containing _text_. 
@@ -471,9 +518,6 @@ class GsmModem(object):
         """Returns an integer between 1 and 99, representing the current
            signal strength of the GSM network, False if we don't know, or
            None if the modem can't report it."""
-        # TODO this is not a good way to tell if u can send sms --
-        # you don't have to be registered on a network to get
-        # a valid signal strength from the modem!!!!!!!!
 
         data = self.query("AT+CSQ")
         md = re.match(r"^\+CSQ: (\d+),", data)
@@ -495,6 +539,10 @@ class GsmModem(object):
         """Blocks until the signal strength indicates that the
            device is active on the GSM network. It's a good idea
            to call this before trying to send or receive anything."""
+        # TODO AT+CSQ is not a good way to tell if u can send sms --
+        # you don't have to be registered on a network (or have a SIM
+        # inserted) to get a valid signal strength from the modem!!!!!!!!
+        # use AT+CREG? or AT+COPS? instead
 
         while True:
             csq = self.signal_strength()

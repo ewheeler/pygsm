@@ -36,6 +36,12 @@ if __name__ == "__main__":
         # if the connection settings are wrong)
         print "Connecting to GSM Modem..."
         modem = GsmModem(port=port, **conf)
+
+#        print "Checking airtime balance..."
+#        balance = modem.run_ussd("#123#")
+#        if balance is not None:
+#            print balance
+
         print "Waiting for incoming messages..."
 
         # check for new messages every two

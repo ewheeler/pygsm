@@ -103,6 +103,37 @@ class DeviceWrapper(object):
             if buf == "ERROR":
                 raise(errors.GsmModemError)
 
+    def read_lines_until(self, expectation, read_term=None, read_timeout=None):
+        buffer = []
+
+        # keep on looping until a command terminator
+        # is encountered. these are NOT the same as the
+        # "read_term" argument - only OK or ERROR is valid
+        # in addition to lines beginning with "expectation"
+        while(True):
+            buf = self._read(
+                read_term=read_term,
+                read_timeout=read_timeout)
+
+            buf = buf.strip()
+            buffer.append(buf)
+
+            if buf.startswith(expectation):
+                return buffer
+            
+            # some errors contain useful error codes, so raise a
+            # proper error with a description from pygsm/errors.py
+            m = re.match(r"^\+(CM[ES]) ERROR: (\d+)$", buf)
+            if m is not None:
+                type, code = m.groups()
+                raise(errors.GsmModemError(type, int(code)))
+
+            # ...some errors are not so useful
+            # (at+cmee=1 should enable error codes)
+            if buf == "ERROR":
+                raise(errors.GsmModemError)
+
+
     def _log(self, str, type="debug"):
         if hasattr(self, "logger"):
             self.logger(self, str, type)    
