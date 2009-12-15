@@ -438,50 +438,105 @@ class GsmModem(object):
 
 
     def run_ussd(self, code_string, read_term=None, read_timeout=None, write_term="\r", raise_errors=True):
-        try:
-            # run USSD code, and wait for the
-            # response. the '1' indicates that we
-            # want the result presented to us
-            ussd_string = "AT+CUSD=1,\"%s\"" % (code_string) 
-            with self.modem_lock:
-                self._write(ussd_string + write_term)
-                lines = self.device.read_lines_until(
-                    "+CUSD:",
-                    read_term=read_term,
-                    read_timeout=read_timeout)
+        # keep looping until the command
+        # succeeds or we hit the limit
+        retries = 0
+        while retries < self.max_retries:
+            try:
+                # run USSD code, and wait for the
+                # response. the '1' indicates that we
+                # want the result presented to us
+                ussd_string = "AT+CUSD=1,\"%s\"" % (code_string) 
+                with self.modem_lock:
+                    self._write(ussd_string + write_term)
+                    lines = self.device.read_lines_until(
+                        "+CUSD:",
+                        read_term=read_term,
+                        read_timeout=read_timeout)
 
-        except errors.GsmError, err:
-            if not raise_errors:
-                return None
+            except errors.GsmError, err:
+                if not raise_errors:
+                    return None
+                else:
+                    raise(err)
+
+            # if the first line of the response echoes the cmd
+            # (it shouldn't, if ATE0 worked), silently drop it
+            if lines[0] == ussd_string:
+                lines.pop(0)
+
+            # remove all blank lines and unsolicited
+            # status messages. i can't seem to figure
+            # out how to reliably disable them, and
+            # AT+WIND=0 doesn't work on this modem
+            lines = [
+                line
+                for line in lines
+                if line      != "" or\
+                line[0:6] == "+WIND:" or\
+                line[0:6] == "+CREG:" or\
+                line[0:7] == "+CGRED:"]
+
+            # parse out any incoming sms that were bundled
+            # with this data (to be fetched later by an app)
+            lines = self._parse_incoming_sms(lines)
+
+            # rest up for a bit (modems are
+            # slow, and get confused easily)
+            time.sleep(self.cmd_delay)
+
+            # don't send GSM encoded strings to the backend
+            lines = [line.decode('gsm') for line in lines]
+
+            result_string = ""
+            result_lines = []
+            for line in lines:
+                # AT+CUSD returns OK and then sends the response
+                # after a brief interlude
+                if line.startswith("OK"):
+                    continue
+                else:
+                    result_lines.append(line)
+
+            if len(result_lines) > 0:
+                # response string from network can be multiline, so
+                # flatten these lines into a single string
+                result_string = " ".join(result_lines)
             else:
-                raise(err)
+                return None
 
-        # if the first line of the response echoes the cmd
-        # (it shouldn't, if ATE0 worked), silently drop it
-        if lines[0] == ussd_string:
-            lines.pop(0)
+            result_codes = {
+                "0" : "no further user action required",
+                "1" : "further user action required",
+                "2" : "USSD terminated by network",
+                "4" : "Operation not supported"
+            }
 
-        # remove all blank lines and unsolicited
-        # status messages. i can't seem to figure
-        # out how to reliably disable them, and
-        # AT+WIND=0 doesn't work on this modem
-        lines = [
-            line
-            for line in lines
-            if line      != "" or\
-               line[0:6] == "+WIND:" or\
-               line[0:6] == "+CREG:" or\
-               line[0:7] == "+CGRED:"]
+            # this seems dodgy, but network *should* always reply with at 
+            # least one line beginning with '+CUSD: #'
+            if result_string[7].isdigit():
+                result_code = result_string[7]
+                if result_code == "4":
+                    time.sleep(self.retry_delay)
+                    retries += 1
+                    continue
+                else:
+                    break
 
-        # parse out any incoming sms that were bundled
-        # with this data (to be fetched later by an app)
-        lines = self._parse_incoming_sms(lines)
+        if result_code != "2":
+            # TODO test on other networks. ORANGE SN consistently
+            # gives response code 2 when you run a valid USSD code,
+            # but other networks could give 0
+            return result_codes[result_code]
+        else:
+            # split the result_string by " so we can return only
+            # the meat of the result without the +CUSD: stuff and
+            # the trailing encoding info
+            human_result = result_string.split('"')[1]
+            return human_result
 
-        # rest up for a bit (modems are
-        # slow, and get confused easily)
-        time.sleep(self.cmd_delay)
-
-        return lines
+        # have no idea what we have, so return
+        return result_string
 
 
     def send_sms(self, recipient, text):
