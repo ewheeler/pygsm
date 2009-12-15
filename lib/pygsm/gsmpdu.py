@@ -331,12 +331,15 @@ class ReceivedGsmPdu(GsmPdu):
         # now the protocol id
         # we only understand SMS (0)
         tp_pid,pdu=_consume_one_int(pdu)
-        if tp_pid != 0:
+#        if tp_pid != 0:
             # can't deal
-            raise SmsParseException("Not SMS protocol, bailing")
+#            raise SmsParseException("Not SMS protocol, bailing")
 
         # get and interpet DCS (char encoding info)
         self.encoding,pdu=_consume(pdu,1,_read_dcs)
+        # TODO set in _read_dcs
+        # it is safe to assume that a DCS value of 11 (reserved) is gsm
+        # seriously. i read it on the internet
         if self.encoding not in ['gsm','ucs2']:
             raise SmsParseException("Don't understand short message encoding")
 
@@ -419,10 +422,11 @@ def _read_dcs(dcs):
     # make an int for masking
     dcs=int(dcs,16)
 
-    # for an SMS, as opposed to a 'voice mail waiting'
-    # indicator, first 4-bits must be zero
-    if dcs & 0xf0 != 0:
-        # not an SMS!
+    # changed from dcs & 0xf0 so that we accept SMS-like
+    # messages that have a message class in bit 4
+    # (things like network orignated confirmation messages, etc)
+    if dcs & 0xe0 != 0:
+        # not an SMS-like message!
         return None
 
     dcs &= 0x0c # mask off everything but bits 3&2
