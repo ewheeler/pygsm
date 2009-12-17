@@ -485,8 +485,16 @@ class GsmModem(object):
             # slow, and get confused easily)
             time.sleep(self.cmd_delay)
 
-            # don't send GSM encoded strings to the backend
-            lines = [line.decode('gsm') for line in lines]
+            # don't send oddly encoded strings to the backend!
+            try:
+                # TODO Orange SN sends these in Codepage 850 encoding,
+                # which was used by DOS in Western Europe.
+                # Wikipedia sez: "According to Microsoft, it is obsolete
+                # and unsupported."
+                lines = [line.decode('cp850') for line in lines]
+                lines = [line.encode('utf_8') for line in lines]
+            except Exception, e:
+                print e
 
             result_string = ""
             result_lines = []
@@ -535,7 +543,7 @@ class GsmModem(object):
             human_result = result_string.split('"')[1]
             return human_result
 
-        # have no idea what we have, so return
+        # have no idea what we have, so return it!
         return result_string
 
 
