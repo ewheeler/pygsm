@@ -44,7 +44,7 @@ class PduSmsHandler(SmsHandler):
                 # the first blank '00' byte
                 self.modem.command( 
                 'AT+CMGS=%d' % (len(pdu_string)/2 - 1), 
-                read_timeout=1
+                read_timeout=10
                 )
 
                 # if no error is raised within the timeout period,
