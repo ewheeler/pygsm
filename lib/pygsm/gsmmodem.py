@@ -446,7 +446,8 @@ class GsmModem(object):
                 # run USSD code, and wait for the
                 # response. the '1' indicates that we
                 # want the result presented to us
-                ussd_string = "AT+CUSD=1,\"%s\"" % (code_string) 
+                # cast as string -- don't want unicode here
+                ussd_string = "AT+CUSD=1,\"%s\"" % (str(code_string)) 
                 with self.modem_lock:
                     self._write(ussd_string + write_term)
                     lines = self.device.read_lines_until(
