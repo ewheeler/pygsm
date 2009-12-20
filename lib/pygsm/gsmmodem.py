@@ -172,6 +172,8 @@ class GsmModem(object):
         # the reconnect flag is irrelevant
         if not hasattr(self, "device") or (self.device is None):
             with self.modem_lock:
+                if 'rtscts' in self.device_kwargs:
+                    self.device_kwargs['rtscts'] = int(self.device_kwargs['rtscts'])
                 self.device = DeviceWrapper(
                     self.logger, *self.device_args,
                     **self.device_kwargs)
