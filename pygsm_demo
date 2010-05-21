@@ -1,6 +1,15 @@
 #!/usr/bin/env python
 # vim: ai ts=4 sts=4 et sw=4
 
+"""
+This demo utility can be launched, for example, as:
+pygsm_demo /dev/ttyUSB0 baudrate=115200 rtscts=1
+
+/dev/ttyUSB0 = serial port where modem is attached
+               on windows, this could look like 'COM2'
+baudate=115200 rtscts=1 = terminal settings
+"""
+
 import os
 import sys
 import time
